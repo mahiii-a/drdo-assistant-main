@@ -1,0 +1,14 @@
+# Model files
+my_embedding_model/
+
+# Vector store
+assets/faiss_index.bin
+assets/metadata.pkl
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+__pycache__/
+*.pyc
+*.pyo
+venv/

@@ -1,0 +1,16 @@
+numpy
+pandas
+langchain
+langchain-core
+langchain-community
+tqdm
+pathlib
+langchain-text-splitters
+pypdf
+pymupdf
+docx2txt
+transformers
+python-dotenv
+sentence-transformers
+faiss-cpu
+nltk
