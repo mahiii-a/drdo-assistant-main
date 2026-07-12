@@ -11,7 +11,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
+import threading
 from src.ingestion.loader import DocumentLoader
 from src.chunking.chunking import RecursiveChunker
 from src.embedding.embedding import Embedding
@@ -80,3 +80,50 @@ def rag_query(req: ChatRequest):
         raise HTTPException(status_code=502, detail=f"LLM call failed: {e}")
 
     return {"answer": answer}
+
+import threading
+from pydantic import BaseModel
+
+index_lock = threading.Lock()  # prevents two requests from mutating FAISS at the same time
+
+loader = DocumentLoader()
+chunker = RecursiveChunker()
+
+class IngestRequest(BaseModel):
+    filepath: str
+    doc_id: int
+
+class DeleteRequest(BaseModel):
+    doc_id: int
+
+@app.post("/rag/ingest")
+def rag_ingest(req: IngestRequest):
+    if not os.path.exists(req.filepath):
+        raise HTTPException(status_code=404, detail=f"File not found: {req.filepath}")
+
+    documents = loader.load_data(req.filepath)
+    if not documents:
+        raise HTTPException(status_code=400, detail="Unsupported or unreadable file type")
+
+    chunks = chunker.chunking(documents)
+    embeddings = embedder.embed(chunks)
+
+    with index_lock:
+        vectordb.add_embeddings(embeddings, chunks, doc_id=req.doc_id)
+        vectordb.save()
+
+    return {
+        "status": "success",
+        "doc_id": req.doc_id,
+        "chunks_added": len(chunks),
+        "total_vectors": vectordb.index.ntotal
+    }
+
+@app.post("/rag/delete")
+def rag_delete(req: DeleteRequest):
+    with index_lock:
+        removed = vectordb.remove_document(req.doc_id)
+        if removed > 0:
+            vectordb.save()
+
+    return {"status": "success", "doc_id": req.doc_id, "vectors_removed": removed}
